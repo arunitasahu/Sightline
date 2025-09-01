@@ -1,0 +1,8 @@
+python-multipart
+tensorflow<2.20
+tf-keras
+fastapi
+uvicorn
+deepface
+opencv-python
+pytest
