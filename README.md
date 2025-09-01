@@ -29,14 +29,15 @@ A powerful, containerized FastAPI microservice for facial recognition using Deep
 ```
 facial-service/
 ├── src/
-│   ├── main.py        # FastAPI app and endpoints
-│   ├── faces.py       # Core facial recognition logic
-│   ├── db.py          # SQLite database integration
-├── data/              # Stores face images and database
-├── requirements.txt   # Python dependencies
-├── Dockerfile         # Container build instructions
-├── docker-compose.yml # Multi-container orchestration
-└── README.md          # Project documentation
+│   ├── main.py              # FastAPI app and endpoints
+│   ├── faces.py             # Core facial recognition logic
+│   ├── db.py                # SQLite database integration
+├── data/                    # Stores face images and database
+├── app.py                   # Render deployment entry point
+├── requirements.txt         # Python dependencies
+├── Dockerfile               # Container build instructions
+├── docker-compose.local.yml # Local development with Docker
+└── README.md                # Project documentation
 ```
 
 ---
@@ -51,7 +52,7 @@ cd facial-service
 
 ### 2. Build and run with Docker Compose
 ```sh
-docker compose up --build
+docker compose -f docker-compose.local.yml up --build
 ```
 
 ### 3. Access the API
@@ -85,7 +86,7 @@ docker compose up --build
 3. **Connect your GitHub repo.**
 4. **Set build/start commands:**
    - Build: `pip install --upgrade pip && pip install -r requirements.txt`
-   - Start: `gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
+   - Start: `gunicorn app:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
 5. **Choose the free plan and deploy.**
 6. **Access your API at `https://your-app.onrender.com/docs`**
 
