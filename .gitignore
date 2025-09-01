@@ -3,8 +3,12 @@ venv/
 env/
 .venv/
 
-# Data directory
-data/
+# Data directory (but keep structure)
+data/*
+!data/.gitkeep
+!data/faces/
+data/faces/*
+!data/faces/.gitkeep
 
 # Python cache
 __pycache__/

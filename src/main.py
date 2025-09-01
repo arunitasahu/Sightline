@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form
-from src.faces import register_face, recognize_faces, list_faces
+from faces import register_face, recognize_faces, list_faces
 import os
 
 app = FastAPI()

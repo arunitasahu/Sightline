@@ -85,7 +85,7 @@ docker compose up --build
 3. **Connect your GitHub repo.**
 4. **Set build/start commands:**
    - Build: `pip install --upgrade pip && pip install -r requirements.txt`
-   - Start: `uvicorn src.main:app --host 0.0.0.0 --port 8000`
+   - Start: `gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
 5. **Choose the free plan and deploy.**
 6. **Access your API at `https://your-app.onrender.com/docs`**
 

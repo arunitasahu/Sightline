@@ -1,8 +1,9 @@
 python-multipart
-tensorflow<2.20
+tensorflow>=2.20.0
 tf-keras
 fastapi
 uvicorn
+gunicorn
 deepface
-opencv-python
+opencv-python-headless
 pytest

@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 from deepface import DeepFace
-from src.db import init_db, add_face, get_all_faces, get_face_path
+from db import init_db, add_face, get_all_faces, get_face_path
 
 FACES_DIR = os.path.join(os.path.dirname(__file__), '../data/faces')
 os.makedirs(FACES_DIR, exist_ok=True)
