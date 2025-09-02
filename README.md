@@ -108,7 +108,7 @@ docker compose -f docker-compose.local.yml up --build
 
 ---
 
-## 🌍 Cloud Deployment (Done! ✅)
+## 🌍 Cloud Deployment 
 
 ### ✅ **Already Deployed on Render**
 **Live API**: [https://sightline-4s51.onrender.com/docs](https://sightline-4s51.onrender.com/docs)
