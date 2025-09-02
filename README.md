@@ -113,23 +113,6 @@ docker compose -f docker-compose.local.yml up --build
 ### ✅ **Already Deployed on Render**
 **Live API**: [https://sightline-4s51.onrender.com/docs](https://sightline-4s51.onrender.com/docs)
 
-### 🔄 **Deploy Your Own Version**
-1. **Fork this repository**
-2. **Sign up at [render.com](https://render.com)**
-3. **Create a new Web Service and connect your fork**
-4. **Set build/start commands:**
-   - Build: `pip install --upgrade pip && pip install -r requirements.txt`
-   - Start: `gunicorn app:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
-5. **Choose the free plan and deploy**
-6. **Your API will be live at `https://your-app.onrender.com/docs`**
-
-### 💰 **Free Tier Benefits:**
-- ✅ 750 hours/month (always-on for most use cases)
-- ✅ Custom domain support
-- ✅ Automatic HTTPS
-- ✅ Git-based deployments
-- ⚠️ Spins down after 15 minutes of inactivity (50+ second wake-up time)
-
 ---
 
 ---
@@ -154,18 +137,6 @@ docker compose -f docker-compose.local.yml up --build
 - SQLite persistent storage
 - Real-time API responses (when active)
 - Interactive documentation
-
-### **⚠️ Current Limitations (Free Tier):**
-- **Cold Start**: 50+ second delay after 15 minutes of inactivity
-- **Memory**: 512MB RAM limit
-- **Storage**: Temporary filesystem (data resets on service restart)
-- **Compute**: Shared CPU resources
-
-### **🚀 Upgrade Benefits ($7/month):**
-- Always-on service (no cold starts)
-- Persistent disk storage
-- More memory and CPU
-- Custom domains
 
 ---
 
