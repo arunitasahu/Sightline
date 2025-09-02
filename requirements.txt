@@ -1,6 +1,5 @@
 python-multipart
-tensorflow>=2.20.0
-tf-keras
+tensorflow==2.15.0
 fastapi
 uvicorn
 gunicorn
