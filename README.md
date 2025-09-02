@@ -35,7 +35,7 @@ facial-service/
 ├── data/                    # Stores face images and database
 ├── app.py                   # Render deployment entry point
 ├── requirements.txt         # Python dependencies
-├── Dockerfile               # Container build instructions
+├── Dockerfile.local         # Local container build instructions
 ├── docker-compose.local.yml # Local development with Docker
 └── README.md                # Project documentation
 ```
@@ -96,6 +96,18 @@ docker compose -f docker-compose.local.yml up --build
 Once deployed, add your public API link here:
 ```
 [Open Swagger UI](https://your-app.onrender.com/docs)
+```
+
+---
+
+## 🐳 Local Docker Development
+
+To use Docker locally:
+```bash
+# Rename files back to use Docker locally
+mv Dockerfile.local Dockerfile
+mv docker-compose.local.yml docker-compose.yml
+docker compose up --build
 ```
 
 ---
