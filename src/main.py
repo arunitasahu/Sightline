@@ -8,6 +8,10 @@ app = FastAPI()
 def read_root():
     return {"message": "Facial Recognition Service is running."}
 
+@app.get("/healthz")
+def health_check():
+    return {"status": "healthy", "service": "facial-recognition"}
+
 @app.post("/register")
 async def register(name: str = Form(...), file: UploadFile = File(...)):
     temp_path = f"/tmp/{file.filename}"
