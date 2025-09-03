@@ -9,27 +9,9 @@ _conn = None
 
 def get_connection():
     global _conn
-    try:
-        if _conn is None:
-            _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-            # Initialize table
-            c = _conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS faces (
-                name TEXT PRIMARY KEY,
-                image_data BLOB NOT NULL,
-                image_format TEXT NOT NULL DEFAULT 'jpg'
-            )''')
-            _conn.commit()
-        
-        # Test connection
-        _conn.execute('SELECT 1')
-        return _conn
-        
-    except Exception as e:
-        print(f"Database connection error: {str(e)}")
-        # Reset connection and try again
-        _conn = None
+    if _conn is None:
         _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        # Initialize table
         c = _conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS faces (
             name TEXT PRIMARY KEY,
@@ -37,7 +19,7 @@ def get_connection():
             image_format TEXT NOT NULL DEFAULT 'jpg'
         )''')
         _conn.commit()
-        return _conn
+    return _conn
 
 # Initialize database and create table if not exists
 def init_db():
