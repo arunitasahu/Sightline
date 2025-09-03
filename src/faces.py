@@ -1,10 +1,12 @@
 import os
 import tempfile
+import pickle
+import base64
 
 # Lazy imports to reduce memory usage
 _cv2 = None
 _np = None
-_DeepFace = None
+_face_recognition = None
 
 def get_cv2():
     global _cv2
@@ -20,34 +22,12 @@ def get_np():
         _np = np
     return _np
 
-def get_deepface():
-    global _DeepFace
-    if _DeepFace is None:
-        # Configure TensorFlow for low memory usage
-        import os
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF logging
-        os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN optimizations
-        
-        try:
-            import tensorflow as tf
-            # Configure TensorFlow for memory efficiency
-            gpus = tf.config.experimental.list_physical_devices('GPU')
-            if gpus:
-                try:
-                    for gpu in gpus:
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                except RuntimeError as e:
-                    print(f"GPU configuration error: {e}")
-            
-            # Limit TensorFlow to use less memory
-            tf.config.threading.set_inter_op_parallelism_threads(1)
-            tf.config.threading.set_intra_op_parallelism_threads(1)
-        except Exception as e:
-            print(f"TensorFlow configuration warning: {e}")
-        
-        from deepface import DeepFace
-        _DeepFace = DeepFace
-    return _DeepFace
+def get_face_recognition():
+    global _face_recognition
+    if _face_recognition is None:
+        import face_recognition
+        _face_recognition = face_recognition
+    return _face_recognition
 
 from db import init_db, add_face, get_all_faces, get_all_face_data
 
@@ -56,35 +36,45 @@ init_db()
 
 # Register a new face
 def register_face(name: str, image_path: str):
-    cv2 = get_cv2()
+    try:
+        face_recognition = get_face_recognition()
+        
+        # Load image and find face encodings
+        image = face_recognition.load_image_file(image_path)
+        face_encodings = face_recognition.face_encodings(image)
+        
+        if len(face_encodings) == 0:
+            raise ValueError('No face found in the image')
+        
+        if len(face_encodings) > 1:
+            raise ValueError('Multiple faces found in image. Please use an image with only one face.')
+        
+        # Get the first (and only) face encoding
+        face_encoding = face_encodings[0]
+        
+        # Serialize the face encoding for storage
+        encoding_data = pickle.dumps(face_encoding)
+        
+        # Store in database
+        add_face(name, encoding_data, 'encoding')
+        
+        return {"name": name, "status": "registered", "message": f"Face for {name} registered successfully"}
     
-    # Read the image
-    img = cv2.imread(image_path)
-    if img is None:
-        raise ValueError('Image not found or unreadable')
-    
-    # Convert image to bytes for storage
-    _, buffer = cv2.imencode('.jpg', img)
-    image_data = buffer.tobytes()
-    
-    # Store in database
-    add_face(name, image_data, 'jpg')
-    
-    return {"name": name, "status": "registered", "message": f"Face for {name} registered successfully"}
+    except Exception as e:
+        return {"name": name, "status": "error", "message": f"Registration failed: {str(e)}"}
 
 # Recognize faces in an image
 def recognize_faces(image_path: str):
     try:
-        cv2 = get_cv2()
+        face_recognition = get_face_recognition()
         np = get_np()
-        DeepFace = get_deepface()
         
-        # Read the input image
-        img = cv2.imread(image_path)
-        if img is None:
-            raise ValueError('Image not found or unreadable')
+        # Load the input image and find face encodings
+        image = face_recognition.load_image_file(image_path)
+        face_encodings = face_recognition.face_encodings(image)
         
-        results = []
+        if len(face_encodings) == 0:
+            return {"message": "No faces found in the image", "matches": []}
         
         # Get registered faces with error handling
         try:
@@ -96,65 +86,54 @@ def recognize_faces(image_path: str):
         if not registered_faces:
             return {"message": "No faces registered yet", "matches": []}
         
-        temp_files = []  # Track temp files for cleanup
+        results = []
         
-        try:
-            for name, face_data, face_format in registered_faces:
-                temp_stored_path = None
+        # For each face found in the input image
+        for face_encoding in face_encodings:
+            best_match_name = None
+            best_distance = float('inf')
+            
+            # Compare with all registered faces
+            for name, encoding_data, format_type in registered_faces:
+                if format_type != 'encoding':
+                    continue  # Skip non-encoding data
+                
                 try:
-                    # Convert stored image data back to image
-                    nparr = np.frombuffer(face_data, np.uint8)
-                    stored_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    # Deserialize the stored face encoding
+                    stored_encoding = pickle.loads(encoding_data)
                     
-                    if stored_img is None:
-                        print(f"Failed to decode image for {name}")
-                        continue
+                    # Calculate face distance (lower is better)
+                    distances = face_recognition.face_distance([stored_encoding], face_encoding)
+                    distance = distances[0]
                     
-                    # Create temporary file for DeepFace verification
-                    temp_stored = tempfile.NamedTemporaryFile(suffix=f'.{face_format}', delete=False)
-                    temp_stored_path = temp_stored.name
-                    temp_stored.close()
-                    temp_files.append(temp_stored_path)
-                    
-                    # Write image to temp file
-                    if not cv2.imwrite(temp_stored_path, stored_img):
-                        print(f"Failed to write temp file for {name}")
-                        continue
-                    
-                    # Verify faces with timeout protection
-                    verification = DeepFace.verify(
-                        img1_path=temp_stored_path, 
-                        img2_path=image_path, 
-                        enforce_detection=False,
-                        model_name='Facenet',  # Use lighter model
-                        detector_backend='opencv'  # Use OpenCV detector for efficiency
-                    )
-                    
-                    if verification.get('verified', False):
-                        distance = verification.get('distance', 1.0)
-                        confidence = max(0, round(1 - distance, 3)) if distance < 1 else 0.1
-                        results.append({
-                            "name": name,
-                            "confidence": confidence
-                        })
-                        
+                    # If this is the best match so far and below threshold
+                    if distance < best_distance and distance < 0.6:  # 0.6 is a good threshold
+                        best_distance = distance
+                        best_match_name = name
+                
                 except Exception as e:
-                    print(f"Error processing face {name}: {str(e)}")
+                    print(f"Error processing stored face {name}: {str(e)}")
                     continue
-        
-        finally:
-            # Clean up all temporary files
-            for temp_path in temp_files:
-                try:
-                    if os.path.exists(temp_path):
-                        os.unlink(temp_path)
-                except Exception as e:
-                    print(f"Error cleaning up temp file {temp_path}: {str(e)}")
+            
+            # If we found a good match
+            if best_match_name:
+                confidence = max(0, round(1 - best_distance, 3))
+                results.append({
+                    "name": best_match_name,
+                    "confidence": confidence
+                })
         
         if results:
-            # Sort by confidence (highest first)
-            results.sort(key=lambda x: x['confidence'], reverse=True)
-            return {"message": f"Found {len(results)} matching face(s)", "matches": results}
+            # Sort by confidence (highest first) and remove duplicates
+            unique_results = {}
+            for result in results:
+                name = result["name"]
+                if name not in unique_results or result["confidence"] > unique_results[name]["confidence"]:
+                    unique_results[name] = result
+            
+            final_results = list(unique_results.values())
+            final_results.sort(key=lambda x: x['confidence'], reverse=True)
+            return {"message": f"Found {len(final_results)} matching face(s)", "matches": final_results}
         else:
             return {"message": "No matching faces found", "matches": []}
             

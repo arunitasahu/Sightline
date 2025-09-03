@@ -1,11 +1,8 @@
 #!/bin/bash
 
 # Memory optimization environment variables
-export TF_CPP_MIN_LOG_LEVEL=3
-export TF_ENABLE_ONEDNN_OPTS=0
 export OMP_NUM_THREADS=1
-export TF_NUM_INTEROP_THREADS=1
-export TF_NUM_INTRAOP_THREADS=1
+export OPENBLAS_NUM_THREADS=1
 
 # Limit Python memory usage
 export PYTHONHASHSEED=random
