@@ -1,8 +1,14 @@
 python-multipart
-tensorflow==2.13.0
+# Use CPU-only TensorFlow to reduce memory usage
+tensorflow-cpu==2.13.0
 fastapi
-uvicorn
+uvicorn[standard]
 gunicorn
-deepface
-opencv-python-headless
+# Use specific DeepFace version known to work well
+deepface==0.0.79
+# Use headless OpenCV to reduce dependencies
+opencv-python-headless==4.8.1.78
+# Add memory optimization libraries
+psutil
+# Testing
 pytest

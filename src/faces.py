@@ -1,8 +1,54 @@
 import os
-import cv2
-import numpy as np
 import tempfile
-from deepface import DeepFace
+
+# Lazy imports to reduce memory usage
+_cv2 = None
+_np = None
+_DeepFace = None
+
+def get_cv2():
+    global _cv2
+    if _cv2 is None:
+        import cv2
+        _cv2 = cv2
+    return _cv2
+
+def get_np():
+    global _np
+    if _np is None:
+        import numpy as np
+        _np = np
+    return _np
+
+def get_deepface():
+    global _DeepFace
+    if _DeepFace is None:
+        # Configure TensorFlow for low memory usage
+        import os
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF logging
+        os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN optimizations
+        
+        try:
+            import tensorflow as tf
+            # Configure TensorFlow for memory efficiency
+            gpus = tf.config.experimental.list_physical_devices('GPU')
+            if gpus:
+                try:
+                    for gpu in gpus:
+                        tf.config.experimental.set_memory_growth(gpu, True)
+                except RuntimeError as e:
+                    print(f"GPU configuration error: {e}")
+            
+            # Limit TensorFlow to use less memory
+            tf.config.threading.set_inter_op_parallelism_threads(1)
+            tf.config.threading.set_intra_op_parallelism_threads(1)
+        except Exception as e:
+            print(f"TensorFlow configuration warning: {e}")
+        
+        from deepface import DeepFace
+        _DeepFace = DeepFace
+    return _DeepFace
+
 from db import init_db, add_face, get_all_faces, get_all_face_data
 
 # Initialize the database
@@ -10,6 +56,8 @@ init_db()
 
 # Register a new face
 def register_face(name: str, image_path: str):
+    cv2 = get_cv2()
+    
     # Read the image
     img = cv2.imread(image_path)
     if img is None:
@@ -27,6 +75,10 @@ def register_face(name: str, image_path: str):
 # Recognize faces in an image
 def recognize_faces(image_path: str):
     try:
+        cv2 = get_cv2()
+        np = get_np()
+        DeepFace = get_deepface()
+        
         # Read the input image
         img = cv2.imread(image_path)
         if img is None:
@@ -73,7 +125,9 @@ def recognize_faces(image_path: str):
                     verification = DeepFace.verify(
                         img1_path=temp_stored_path, 
                         img2_path=image_path, 
-                        enforce_detection=False
+                        enforce_detection=False,
+                        model_name='Facenet',  # Use lighter model
+                        detector_backend='opencv'  # Use OpenCV detector for efficiency
                     )
                     
                     if verification.get('verified', False):
