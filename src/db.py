@@ -9,27 +9,11 @@ _conn = None
 
 def get_connection():
     global _conn
-    try:
-        if _conn is None:
-            _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-            # Initialize table
-            c = _conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS faces (
-                name TEXT PRIMARY KEY,
-                image_data BLOB NOT NULL,
-                image_format TEXT NOT NULL DEFAULT 'jpg'
-            )''')
-            _conn.commit()
-        
-        # Test connection
-        _conn.execute('SELECT 1')
-        return _conn
-        
-    except Exception as e:
-        print(f"Database connection error: {str(e)}")
-        # Reset connection and try again
-        _conn = None
+    if _conn is None:
         _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        # Enable WAL mode for better concurrent access
+        _conn.execute('PRAGMA journal_mode=WAL')
+        # Initialize table
         c = _conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS faces (
             name TEXT PRIMARY KEY,
@@ -37,7 +21,9 @@ def get_connection():
             image_format TEXT NOT NULL DEFAULT 'jpg'
         )''')
         _conn.commit()
-        return _conn
+        print("Database initialized successfully")
+    
+    return _conn
 
 # Initialize database and create table if not exists
 def init_db():
@@ -45,34 +31,51 @@ def init_db():
 
 # Add a face to the database (store image as BLOB)
 def add_face(name, image_data, image_format='jpg'):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('REPLACE INTO faces (name, image_data, image_format) VALUES (?, ?, ?)', 
-              (name, image_data, image_format))
-    conn.commit()
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('REPLACE INTO faces (name, image_data, image_format) VALUES (?, ?, ?)', 
+                  (name, image_data, image_format))
+        conn.commit()
+        print(f"Successfully added face: {name}")
+    except Exception as e:
+        print(f"Error adding face {name}: {str(e)}")
+        raise
 
 # Get all faces from the database
 def get_all_faces():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT name FROM faces')
-    faces = c.fetchall()
-    return [face[0] for face in faces]
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('SELECT name FROM faces')
+        faces = c.fetchall()
+        return [face[0] for face in faces]
+    except Exception as e:
+        print(f"Error getting all faces: {str(e)}")
+        return []
 
 # Get face image data by name
 def get_face_data(name):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT image_data, image_format FROM faces WHERE name = ?', (name,))
-    result = c.fetchone()
-    return result if result else None
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('SELECT image_data, image_format FROM faces WHERE name = ?', (name,))
+        result = c.fetchone()
+        return result if result else None
+    except Exception as e:
+        print(f"Error getting face data for {name}: {str(e)}")
+        return None
 
 # Get all face data (for recognition)
 def get_all_face_data():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT name, image_data, image_format FROM faces')
-    return c.fetchall()
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('SELECT name, image_data, image_format FROM faces')
+        return c.fetchall()
+    except Exception as e:
+        print(f"Error getting all face data: {str(e)}")
+        return []
 
 # Get image path for a given name (backward compatibility)
 def get_face_path(name):
