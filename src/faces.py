@@ -1,62 +1,104 @@
 import os
-import tempfile
-import pickle
+import cv2
+import numpy as np
+from PIL import Image
 import base64
-
-# Lazy imports to reduce memory usage
-_cv2 = None
-_np = None
-_face_recognition = None
-
-def get_cv2():
-    global _cv2
-    if _cv2 is None:
-        import cv2
-        _cv2 = cv2
-    return _cv2
-
-def get_np():
-    global _np
-    if _np is None:
-        import numpy as np
-        _np = np
-    return _np
-
-def get_face_recognition():
-    global _face_recognition
-    if _face_recognition is None:
-        import face_recognition
-        _face_recognition = face_recognition
-    return _face_recognition
-
-from db import init_db, add_face, get_all_faces, get_all_face_data
+import hashlib
+from .db import init_db, add_face, get_all_faces, get_all_face_data
 
 # Initialize the database
 init_db()
 
+def extract_face_features(image_path):
+    """Extract simple face features using OpenCV Haar cascades"""
+    try:
+        # Read image
+        img = cv2.imread(image_path)
+        if img is None:
+            raise ValueError('Image not found or unreadable')
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Load Haar cascade for face detection
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
+        # Detect faces
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        if len(faces) == 0:
+            raise ValueError('No face found in the image')
+        
+        if len(faces) > 1:
+            raise ValueError('Multiple faces found. Please use an image with only one face.')
+        
+        # Get the first (and only) face
+        x, y, w, h = faces[0]
+        face_roi = gray[y:y+h, x:x+w]
+        
+        # Resize face to standard size for comparison
+        face_resized = cv2.resize(face_roi, (100, 100))
+        
+        # Calculate histogram as simple feature
+        hist = cv2.calcHist([face_resized], [0], None, [256], [0, 256])
+        
+        # Normalize histogram
+        hist = cv2.normalize(hist, hist).flatten()
+        
+        return {
+            'face_region': face_resized,
+            'histogram': hist,
+            'face_box': (x, y, w, h)
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Face extraction failed: {str(e)}")
+
+def compare_faces(features1, features2):
+    """Compare two face feature sets and return similarity score"""
+    try:
+        # Compare histograms using correlation
+        hist_corr = cv2.compareHist(features1['histogram'], features2['histogram'], cv2.HISTCMP_CORREL)
+        
+        # Compare face regions using template matching
+        face1 = features1['face_region']
+        face2 = features2['face_region']
+        
+        # Ensure same size
+        if face1.shape != face2.shape:
+            face2 = cv2.resize(face2, (face1.shape[1], face1.shape[0]))
+        
+        # Calculate structural similarity
+        diff = cv2.absdiff(face1, face2)
+        structural_sim = 1.0 - (np.mean(diff) / 255.0)
+        
+        # Combine scores
+        similarity = (hist_corr * 0.6) + (structural_sim * 0.4)
+        return max(0, min(1, similarity))
+        
+    except Exception as e:
+        print(f"Face comparison error: {str(e)}")
+        return 0.0
+
 # Register a new face
 def register_face(name: str, image_path: str):
     try:
-        face_recognition = get_face_recognition()
+        # Extract face features
+        features = extract_face_features(image_path)
         
-        # Load image and find face encodings
-        image = face_recognition.load_image_file(image_path)
-        face_encodings = face_recognition.face_encodings(image)
+        # Serialize features for storage
+        face_data = {
+            'face_region': features['face_region'].tolist(),
+            'histogram': features['histogram'].tolist(),
+            'face_box': features['face_box']
+        }
         
-        if len(face_encodings) == 0:
-            raise ValueError('No face found in the image')
-        
-        if len(face_encodings) > 1:
-            raise ValueError('Multiple faces found in image. Please use an image with only one face.')
-        
-        # Get the first (and only) face encoding
-        face_encoding = face_encodings[0]
-        
-        # Serialize the face encoding for storage
-        encoding_data = pickle.dumps(face_encoding)
+        # Convert to bytes for database storage
+        import json
+        feature_bytes = json.dumps(face_data).encode('utf-8')
         
         # Store in database
-        add_face(name, encoding_data, 'encoding')
+        add_face(name, feature_bytes, 'features')
         
         return {"name": name, "status": "registered", "message": f"Face for {name} registered successfully"}
     
@@ -66,17 +108,10 @@ def register_face(name: str, image_path: str):
 # Recognize faces in an image
 def recognize_faces(image_path: str):
     try:
-        face_recognition = get_face_recognition()
-        np = get_np()
+        # Extract features from input image
+        input_features = extract_face_features(image_path)
         
-        # Load the input image and find face encodings
-        image = face_recognition.load_image_file(image_path)
-        face_encodings = face_recognition.face_encodings(image)
-        
-        if len(face_encodings) == 0:
-            return {"message": "No faces found in the image", "matches": []}
-        
-        # Get registered faces with error handling
+        # Get registered faces
         try:
             registered_faces = get_all_face_data()
         except Exception as e:
@@ -88,40 +123,37 @@ def recognize_faces(image_path: str):
         
         results = []
         
-        # For each face found in the input image
-        for face_encoding in face_encodings:
-            best_match_name = None
-            best_distance = float('inf')
+        # Compare with all registered faces
+        for name, feature_data, format_type in registered_faces:
+            if format_type != 'features':
+                continue  # Skip non-feature data
             
-            # Compare with all registered faces
-            for name, encoding_data, format_type in registered_faces:
-                if format_type != 'encoding':
-                    continue  # Skip non-encoding data
+            try:
+                # Deserialize stored features
+                import json
+                stored_data = json.loads(feature_data.decode('utf-8'))
                 
-                try:
-                    # Deserialize the stored face encoding
-                    stored_encoding = pickle.loads(encoding_data)
-                    
-                    # Calculate face distance (lower is better)
-                    distances = face_recognition.face_distance([stored_encoding], face_encoding)
-                    distance = distances[0]
-                    
-                    # If this is the best match so far and below threshold
-                    if distance < best_distance and distance < 0.6:  # 0.6 is a good threshold
-                        best_distance = distance
-                        best_match_name = name
+                # Reconstruct features
+                stored_features = {
+                    'face_region': np.array(stored_data['face_region'], dtype=np.uint8),
+                    'histogram': np.array(stored_data['histogram'], dtype=np.float32),
+                    'face_box': stored_data['face_box']
+                }
                 
-                except Exception as e:
-                    print(f"Error processing stored face {name}: {str(e)}")
-                    continue
-            
-            # If we found a good match
-            if best_match_name:
-                confidence = max(0, round(1 - best_distance, 3))
-                results.append({
-                    "name": best_match_name,
-                    "confidence": confidence
-                })
+                # Compare faces
+                similarity = compare_faces(input_features, stored_features)
+                
+                # If similarity is above threshold
+                if similarity > 0.6:  # Threshold for match
+                    confidence = round(similarity, 3)
+                    results.append({
+                        "name": name,
+                        "confidence": confidence
+                    })
+                
+            except Exception as e:
+                print(f"Error processing stored face {name}: {str(e)}")
+                continue
         
         if results:
             # Sort by confidence (highest first) and remove duplicates

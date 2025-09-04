@@ -2,7 +2,7 @@ import os
 import gc
 import logging
 from fastapi import FastAPI, UploadFile, File, Form
-from faces import register_face, recognize_faces, list_faces
+from .faces import register_face, recognize_faces, list_faces
 
 # Configure logging for memory tracking
 logging.basicConfig(level=logging.INFO)

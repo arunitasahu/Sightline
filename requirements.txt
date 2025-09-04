@@ -2,11 +2,13 @@ python-multipart
 fastapi
 uvicorn[standard]
 gunicorn
-# Use lightweight face recognition instead of DeepFace
-face-recognition==1.3.0
-# Use minimal OpenCV
+# Ultra-lightweight OpenCV only (no ML dependencies)
 opencv-python-headless==4.8.1.78
-# Add memory optimization libraries
+# Image processing
+pillow
+# Math operations
+numpy
+# Memory monitoring
 psutil
 # Testing
 pytest
